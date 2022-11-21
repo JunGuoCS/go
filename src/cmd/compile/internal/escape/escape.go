@@ -46,8 +46,9 @@ import (
 //
 // Every allocating statement (e.g., variable declaration) or
 // expression (e.g., "new" or "make") is first mapped to a unique
-// "location."
+// "location."	// 生成独立的节点
 //
+// 每个go的赋值动作作为一条有向边，*的数量-&的数量等于边权重
 // We also model every Go assignment as a directed edges between
 // locations. The number of dereference operations minus the number of
 // addressing operations is recorded as the edge's weight (termed
@@ -60,10 +61,12 @@ import (
 //
 //     p = **&**&q  // 2
 //
+// 不能针对地址再取址，所以最多到-1
 // Note that the & operator can only be applied to addressable
 // expressions, and the expression &x itself is not addressable, so
 // derefs cannot go below -1.
 //
+// 大部分表达式可以归约为以上的公式
 // Every Go language construct is lowered into this representation,
 // generally without sensitivity to flow, path, or context; and
 // without distinguishing elements within a compound variable. For
@@ -78,6 +81,7 @@ import (
 //
 //     x = *u
 //
+// 该情况下，不区分x.f和x.g，也不区分u[0]和u[1]，但是切片会做隐式解引用
 // That is, we don't distinguish x.f from x.g, or u[0] from u[1],
 // u[2], etc. However, we do record the implicit dereference involved
 // in indexing a slice.
