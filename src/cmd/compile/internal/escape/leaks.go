@@ -12,6 +12,7 @@ import (
 
 const numEscResults = 7
 
+// 分配从参数到堆或者到函数返回就叫泄露，有点像广泛的逃逸场景，入参分配到堆，或者函数内堆变量返回
 // An leaks represents a set of assignment flows from a parameter
 // to the heap or to any of its function's (first numEscResults)
 // result parameters.
@@ -29,9 +30,11 @@ func (l leaks) Heap() int { return l.get(0) }
 // Result returns -1.
 func (l leaks) Result(i int) int { return l.get(1 + i) }
 
+// 添加一个分配流，从l到堆heap，即逃逸到堆上
 // AddHeap adds an assignment flow from l to the heap.
 func (l *leaks) AddHeap(derefs int) { l.add(0, derefs) }
 
+// 添加一个分配流，从l到函数第i个返回参数
 // AddResult adds an assignment flow from l to its function's i'th
 // result parameter.
 func (l *leaks) AddResult(i, derefs int) { l.add(1+i, derefs) }

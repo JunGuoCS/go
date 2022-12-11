@@ -38,14 +38,17 @@ import (
 //        e.value(k, n.Left)
 //    }
 
+// 类似于节点，代表一个go 变量
 // An location represents an abstract location that stores a Go
 // variable.
 type location struct {
 	n         ir.Node  // represented variable or expression, if any
-	curfn     *ir.Func // enclosing function
-	edges     []edge   // incoming edges
+	curfn     *ir.Func // enclosing function	// 外层函数？
+	edges     []edge   // incoming edges		// 应该指入边？
 	loopDepth int      // loopDepth at declaration
 
+	// PPARAMOUT 是啥？
+	// 有点像记录返回值的索引，比如第一个返回值是1
 	// resultIndex records the tuple index (starting at 1) for
 	// PPARAMOUT variables within their function's result type.
 	// For non-PPARAMOUT variables it's 0.
@@ -62,20 +65,24 @@ type location struct {
 	dst        *location
 	dstEdgeIdx int
 
+	// 似乎是BFS用的队列？
 	// queued is used by walkAll to track whether this location is
 	// in the walk queue.
 	queued bool
 
+	// 表示变量是否逃逸的标志位
 	// escapes reports whether the represented variable's address
 	// escapes; that is, whether the variable must be heap
 	// allocated.
 	escapes bool
 
+	// 表达式的地址生命周期有没超过外部声明，简单来说就是存储空间能否快速复用，逃逸的肯定不行
 	// transient reports whether the represented expression's
 	// address does not outlive the statement; that is, whether
 	// its storage can be immediately reused.
 	transient bool
 
+	// 参数泄露列表
 	// paramEsc records the represented parameter's leak set.
 	paramEsc leaks
 
@@ -84,10 +91,11 @@ type location struct {
 	addrtaken  bool // has this variable's address been taken?
 }
 
+// go 变量之间的边
 // An edge represents an assignment edge between two Go variables.
 type edge struct {
 	src    *location
-	derefs int // >= -1
+	derefs int // >= -1		// 这个类似权重
 	notes  *note
 }
 
@@ -117,20 +125,23 @@ func (l *location) isName(c ir.Class) bool {
 	return l.n != nil && l.n.Op() == ir.ONAME && l.n.(*ir.Name).Class == c
 }
 
+// 代表一个go表达式的评估结果
 // A hole represents a context for evaluation of a Go
 // expression. E.g., when evaluating p in "x = **p", we'd have a hole
 // with dst==x and derefs==2.
 type hole struct {
 	dst    *location
-	derefs int // >= -1
+	derefs int // >= -1		// 表达式整个的权重
 	notes  *note
 
+	// 是否是取地址操作？
 	// addrtaken indicates whether this context is taking the address of
 	// the expression, independent of whether the address will actually
 	// be stored into a variable.
 	addrtaken bool
 }
 
+// 这个结构是干啥的？猜测是记录逃逸信息，类似日志
 type note struct {
 	next  *note
 	where ir.Node

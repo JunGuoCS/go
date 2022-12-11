@@ -168,6 +168,7 @@ func mayAffectMemory(n ir.Node) bool {
 	}
 }
 
+// 栈太大的各种场景
 // HeapAllocReason returns the reason the given Node must be heap
 // allocated, or the empty string if it doesn't.
 func HeapAllocReason(n ir.Node) string {

@@ -82,10 +82,12 @@ import (
 //     x = *u
 //
 // 该情况下，不区分x.f和x.g，也不区分u[0]和u[1]，但是切片会做隐式解引用
+// 因为x.f和x.g都是*int类型，按顺序*x.f=*x
 // That is, we don't distinguish x.f from x.g, or u[0] from u[1],
 // u[2], etc. However, we do record the implicit dereference involved
 // in indexing a slice.
 
+// 一次性分析多个函数用的？
 // A batch holds escape analysis state that's shared across an entire
 // batch of functions being analyzed at once.
 type batch struct {
@@ -96,6 +98,7 @@ type batch struct {
 	blankLoc location
 }
 
+// 闭包表达式和其溢出的hole
 // A closure holds a closure expression and its spill hole (i.e.,
 // where the hole representing storing into its closure record).
 type closure struct {
@@ -103,6 +106,7 @@ type closure struct {
 	clo *ir.ClosureExpr
 }
 
+// batch中的子状态，通过*batch指向所属batch
 // An escape holds state specific to a single function being analyzed
 // within a batch.
 type escape struct {
@@ -112,6 +116,7 @@ type escape struct {
 
 	labels map[*types.Sym]labelState // known labels
 
+	// 循环深度，这玩意有啥用？
 	// loopDepth counts the current loop nesting depth within
 	// curfn. It increments within each "for" loop and at each
 	// label with a corresponding backwards "goto" (i.e.,
@@ -123,6 +128,7 @@ func Funcs(all []ir.Node) {
 	ir.VisitFuncsBottomUp(all, Batch)
 }
 
+// 批量执行逃逸分析
 // Batch performs escape analysis on a minimal batch of
 // functions.
 func Batch(fns []*ir.Func, recursive bool) {
@@ -141,14 +147,17 @@ func Batch(fns []*ir.Func, recursive bool) {
 			s := fmt.Sprintf("\nbefore escape %v", fn)
 			ir.Dump(s, fn)
 		}
+		// 将函数添加近batch
 		b.initFunc(fn)
 	}
 	for _, fn := range fns {
 		if !fn.IsHiddenClosure() {
+			// 遍历函数，判断节点是否是OLABEL或OGOTO，OLABEL不打循环标签，OGOTO打循环标签
 			b.walkFunc(fn)
 		}
 	}
 
+	// 闭包场景特殊处理
 	// We've walked the function bodies, so we've seen everywhere a
 	// variable might be reassigned or have it's address taken. Now we
 	// can decide whether closures should capture their free variables
@@ -164,7 +173,9 @@ func Batch(fns []*ir.Func, recursive bool) {
 		}
 	}
 
+	// 计算数据流图
 	b.walkAll()
+
 	b.finish(fns)
 }
 
@@ -186,11 +197,13 @@ func (b *batch) initFunc(fn *ir.Func) {
 		ir.Dump("escAnalyze", fn)
 	}
 
+	// 给变量绑定location
 	// Allocate locations for local variables.
 	for _, n := range fn.Dcl {
 		e.newLoc(n, false)
 	}
 
+	// 隐藏参数也建location，为什么可以通过fn.OClosure来判断？
 	// Also for hidden parameters (e.g., the ".this" parameter to a
 	// method value wrapper).
 	if fn.OClosure == nil {
@@ -276,6 +289,7 @@ func (b *batch) flowClosure(k hole, clo *ir.ClosureExpr) {
 func (b *batch) finish(fns []*ir.Func) {
 	// Record parameter tags for package export data.
 	for _, fn := range fns {
+		// 每个阶段都记录下状态，可能为了防止并发？
 		fn.SetEsc(escFuncTagged)
 
 		narg := 0
@@ -306,6 +320,7 @@ func (b *batch) finish(fns []*ir.Func) {
 
 		if loc.escapes {
 			if n.Op() == ir.ONAME {
+				// == ir.ONAME 是不是指等于变量名？所以是变量，不等的话是指针
 				if base.Flag.CompilingRuntime {
 					base.ErrorfAt(n.Pos(), "%v escapes to heap, not allowed in runtime", n)
 				}
