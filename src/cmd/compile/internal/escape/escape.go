@@ -293,7 +293,9 @@ func (b *batch) finish(fns []*ir.Func) {
 		fn.SetEsc(escFuncTagged)
 
 		narg := 0
+		// RecvsParams 包含一个结果数组和参数数组
 		for _, fs := range &types.RecvsParams {
+			// fs(XXX) 相当于把当前函数的Fields强转为入参数组或出参数组
 			for _, f := range fs(fn.Type()).Fields().Slice() {
 				narg++
 				f.Note = b.paramTag(fn, narg, f)
@@ -389,8 +391,10 @@ const (
 	nonlooping
 )
 
+// 整个外层函数，参数数量，参数列表中的一个参数（可能是入参列表也可能是出参列表）
 func (b *batch) paramTag(fn *ir.Func, narg int, f *types.Field) string {
 	name := func() string {
+		// Sym 字段方法参数的名字，匿名的话是nil
 		if f.Sym != nil {
 			return f.Sym.Name
 		}
@@ -402,6 +406,7 @@ func (b *batch) paramTag(fn *ir.Func, narg int, f *types.Field) string {
 	// TODO(mdempsky): Generalize this.
 	diagnose := base.Flag.LowerM != 0 && !(fn.Wrapper() || fn.Dupok())
 
+	// fn.Body等于0表明是个指针?
 	if len(fn.Body) == 0 {
 		// Assume that uintptr arguments must be held live across the call.
 		// This is most important for syscall.Syscall.
@@ -424,6 +429,8 @@ func (b *batch) paramTag(fn *ir.Func, narg int, f *types.Field) string {
 
 		var esc leaks
 
+		// ir.Noescape判断节点是否开启逃逸的标记，里面还要很多是否内联、是否有竞态等
+		// ir.Noescape等的标记似乎是go:noescape等注入的，不是逃逸分析是判断的。即用来判断是否要做逃逸分析
 		// External functions are assumed unsafe, unless
 		// //go:noescape is given before the declaration.
 		if fn.Pragma&ir.Noescape != 0 {
@@ -432,6 +439,7 @@ func (b *batch) paramTag(fn *ir.Func, narg int, f *types.Field) string {
 			}
 		} else {
 			if diagnose && f.Sym != nil {
+				// 没有设置不逃逸标记为什么会泄露参数？
 				base.WarnfAt(f.Pos, "leaking param: %v", name())
 			}
 			esc.AddHeap(0)
@@ -460,6 +468,7 @@ func (b *batch) paramTag(fn *ir.Func, narg int, f *types.Field) string {
 		return ""
 	}
 
+	// 匿名参数应该也会用到吧？
 	// Unnamed parameters are unused and therefore do not escape.
 	if f.Sym == nil || f.Sym.IsBlank() {
 		var esc leaks
@@ -471,6 +480,7 @@ func (b *batch) paramTag(fn *ir.Func, narg int, f *types.Field) string {
 	esc := loc.paramEsc
 	esc.Optimize()
 
+	// loc是老的位置，相当于原有变量不逃逸，新变量逃逸了？
 	if diagnose && !loc.escapes {
 		if esc.Empty() {
 			base.WarnfAt(f.Pos, "%v does not escape", name())
@@ -484,6 +494,7 @@ func (b *batch) paramTag(fn *ir.Func, narg int, f *types.Field) string {
 			}
 		}
 		for i := 0; i < numEscResults; i++ {
+			// x表示derefs数量
 			if x := esc.Result(i); x >= 0 {
 				res := fn.Type().Results().Field(i).Sym
 				base.WarnfAt(f.Pos, "leaking param: %v to result %v level=%d", name(), res, x)

@@ -50,6 +50,7 @@ var ErrUnexpectedEOF = errors.New("unexpected EOF")
 // ErrNoProgress is returned by some clients of a Reader when
 // many calls to Read have failed to return any data or error,
 // usually the sign of a broken Reader implementation.
+// Read操作不返回数据，Reader实现有问题时出现吗？
 var ErrNoProgress = errors.New("multiple Read calls return no data or error")
 
 // Reader is the interface that wraps the basic Read method.
@@ -59,6 +60,7 @@ var ErrNoProgress = errors.New("multiple Read calls return no data or error")
 // returns n < len(p), it may use all of p as scratch space during the call.
 // If some data is available but not len(p) bytes, Read conventionally
 // returns what is available instead of waiting for more.
+// 将数据从流读到p，若可读的数据小于p，
 //
 // When Read encounters an error or end-of-file condition after
 // successfully reading n > 0 bytes, it returns the number of
@@ -68,11 +70,14 @@ var ErrNoProgress = errors.New("multiple Read calls return no data or error")
 // a non-zero number of bytes at the end of the input stream may
 // return either err == EOF or err == nil. The next Read should
 // return 0, EOF.
+// n表示遇到报错前读到的数据数.
+// 一个常见的情况是数据流读完了，返回了一个n<=len(p)和err=EOF，下一次调用必返回0,EOF
 //
 // Callers should always process the n > 0 bytes returned before
 // considering the error err. Doing so correctly handles I/O errors
 // that happen after reading some bytes and also both of the
 // allowed EOF behaviors.
+// 调用者应优先处理读到的n(>0) bytes的数据，再去处理错误
 //
 // Implementations of Read are discouraged from returning a
 // zero byte count with a nil error, except when len(p) == 0.
@@ -80,6 +85,8 @@ var ErrNoProgress = errors.New("multiple Read calls return no data or error")
 // nothing happened; in particular it does not indicate EOF.
 //
 // Implementations must not retain p.
+// 不建议返回(0, nil)这种情况，(0, nil)表示没事发生
+// "Implementations must not retain p."指的是p在使用后要销毁掉？
 type Reader interface {
 	Read(p []byte) (n int, err error)
 }
@@ -93,6 +100,7 @@ type Reader interface {
 // Write must not modify the slice data, even temporarily.
 //
 // Implementations must not retain p.
+// 将数据从p写到数据流，当n<len(p)即最后一次调用或遇到报错时时一定要伴随错误码，正常就EOF，不正常就其他
 type Writer interface {
 	Write(p []byte) (n int, err error)
 }
@@ -101,6 +109,7 @@ type Writer interface {
 //
 // The behavior of Close after the first call is undefined.
 // Specific implementations may document their own behavior.
+// 第一次调用后再调用Close会返回什么是不确定的，要根据实现而定
 type Closer interface {
 	Close() error
 }
@@ -113,7 +122,7 @@ type Closer interface {
 // SeekCurrent means relative to the current offset, and
 // SeekEnd means relative to the end
 // (for example, offset = -2 specifies the penultimate byte of the file).
-// Seek returns the new offset relative to the start of the
+// Se ek returns the new offset relative to the start of the
 // file or an error, if any.
 //
 // Seeking to an offset before the start of the file is an error.
