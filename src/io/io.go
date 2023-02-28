@@ -124,13 +124,17 @@ type Closer interface {
 // SeekCurrent means relative to the current offset, and
 // SeekEnd means relative to the end
 // (for example, offset = -2 specifies the penultimate byte of the file).
-// Se ek returns the new offset relative to the start of the
+// Seek returns the new offset relative to the start of the
 // file or an error, if any.
+// Seek用来指定下一次Read和Write方法从什么位置开始
+// offset偏移量，whence相对位置，指偏移量相对文件开始、文件当前还是文件结尾
+// 返回的是相对"文件开始"的偏移量
 //
 // Seeking to an offset before the start of the file is an error.
 // Seeking to any positive offset may be allowed, but if the new offset exceeds
 // the size of the underlying object the behavior of subsequent I/O operations
 // is implementation-dependent.
+// 早于文件开始是一种错误，任何正的offset都是允许的，超过潜在object大小的行为是依赖实现的（不同实现可能不一样）
 type Seeker interface {
 	Seek(offset int64, whence int) (int64, error)
 }
@@ -194,6 +198,7 @@ type ReadWriteSeeker interface {
 // Any error except EOF encountered during the read is also returned.
 //
 // The Copy function uses ReaderFrom if available.
+// 从r读数据直到EOF，n为读取到的bytes数，Copy函数用到该接口
 type ReaderFrom interface {
 	ReadFrom(r Reader) (n int64, err error)
 }
@@ -205,6 +210,7 @@ type ReaderFrom interface {
 // written. Any error encountered during the write is also returned.
 //
 // The Copy function uses WriterTo if available.
+// 写数据到w，n为写入的数据数，Copy函数用到该接口
 type WriterTo interface {
 	WriteTo(w Writer) (n int64, err error)
 }
