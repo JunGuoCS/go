@@ -220,25 +220,31 @@ type WriterTo interface {
 // ReadAt reads len(p) bytes into p starting at offset off in the
 // underlying input source. It returns the number of bytes
 // read (0 <= n <= len(p)) and any error encountered.
+// 从off开始读len(p)字节数据到p
 //
 // When ReadAt returns n < len(p), it returns a non-nil error
 // explaining why more bytes were not returned. In this respect,
 // ReadAt is stricter than Read.
+// 和Read方法的区别是，只要n<len(p)就会返回错误解释为什么。更加严格一些
 //
 // Even if ReadAt returns n < len(p), it may use all of p as scratch
 // space during the call. If some data is available but not len(p) bytes,
 // ReadAt blocks until either all the data is available or an error occurs.
 // In this respect ReadAt is different from Read.
+// 即使ReadAt返回n<len(p), 它仍会用所有p的空间。如果有一些数据是可读的但不是len(p)，有两种表现行为①阻塞等待所有可读的数据读完，或者返回报错
 //
 // If the n = len(p) bytes returned by ReadAt are at the end of the
 // input source, ReadAt may return either err == EOF or err == nil.
+// 如果刚好读到结尾，可能返回err == EOF or err == nil
 //
 // If ReadAt is reading from an input source with a seek offset,
 // ReadAt should not affect nor be affected by the underlying
 // seek offset.
+// ReadAt的行为不应该被潜在的seek offse影响？
 //
 // Clients of ReadAt can execute parallel ReadAt calls on the
 // same input source.
+// 在同一个位置可以并行调用ReadAt
 //
 // Implementations must not retain p.
 type ReaderAt interface {
@@ -251,13 +257,16 @@ type ReaderAt interface {
 // at offset off. It returns the number of bytes written from p (0 <= n <= len(p))
 // and any error encountered that caused the write to stop early.
 // WriteAt must return a non-nil error if it returns n < len(p).
+// 和ReadAt类似，n<len(p)必须返回错误
 //
 // If WriteAt is writing to a destination with a seek offset,
 // WriteAt should not affect nor be affected by the underlying
 // seek offset.
+// 和ReadAt类似，WritteAt的行为不应该被潜在的seek offse影响？
 //
 // Clients of WriteAt can execute parallel WriteAt calls on the same
 // destination if the ranges do not overlap.
+// 范围没有重叠是啥意思？
 //
 // Implementations must not retain p.
 type WriterAt interface {
@@ -269,10 +278,12 @@ type WriterAt interface {
 // ReadByte reads and returns the next byte from the input or
 // any error encountered. If ReadByte returns an error, no input
 // byte was consumed, and the returned byte value is undefined.
+// 由于只返回一个byte，报错则表示没有读到数据
 //
 // ReadByte provides an efficient interface for byte-at-time
 // processing. A Reader that does not implement  ByteReader
 // can be wrapped using bufio.NewReader to add this method.
+// 提供一个逐个byte处理的方法，如果Reader没有实现ByteReader这个接口，可以通过bufio.NewReader来追加
 type ByteReader interface {
 	ReadByte() (byte, error)
 }
@@ -285,6 +296,7 @@ type ByteReader interface {
 // return an error, unread the last byte read (or the byte prior to the
 // last-unread byte), or (in implementations that support the Seeker interface)
 // seek to one byte before the current offset.
+// 如果上一个byte读取报错，UnreadByte会返回错误，且①取消最后一个byte的读取并返回到上一次位置？②取消最后一个unread byte之前的byte，和①有啥区别呀？③如果实现了Seeker，也可能会追溯到前一个offset
 type ByteScanner interface {
 	ByteReader
 	UnreadByte() error
@@ -300,6 +312,7 @@ type ByteWriter interface {
 // ReadRune reads a single encoded Unicode character
 // and returns the rune and its size in bytes. If no character is
 // available, err will be set.
+// 读一个Unicode字符，返回rune=int32字符值（类似c里的ASCII码）和大小和错误码
 type RuneReader interface {
 	ReadRune() (r rune, size int, err error)
 }
@@ -312,6 +325,7 @@ type RuneReader interface {
 // return an error, unread the last rune read (or the rune prior to the
 // last-unread rune), or (in implementations that support the Seeker interface)
 // seek to the start of the rune before the current offset.
+// 和ByteScanner类似，只是对象换成了rune
 type RuneScanner interface {
 	RuneReader
 	UnreadRune() error
@@ -325,6 +339,7 @@ type StringWriter interface {
 // WriteString writes the contents of the string s to w, which accepts a slice of bytes.
 // If w implements StringWriter, its WriteString method is invoked directly.
 // Otherwise, w.Write is called exactly once.
+// 将数据从s写入w，如果w实现了StringWriter，则替换方法调用
 func WriteString(w Writer, s string) (n int, err error) {
 	if sw, ok := w.(StringWriter); ok {
 		return sw.WriteString(s)
@@ -337,9 +352,12 @@ func WriteString(w Writer, s string) (n int, err error) {
 // The error is EOF only if no bytes were read.
 // If an EOF happens after reading fewer than min bytes,
 // ReadAtLeast returns ErrUnexpectedEOF.
+// EOF表示读完了数据，ErrUnexpectedEOF表示读的数据比min少？感觉Unexpected的说法也不太好
 // If min is greater than the length of buf, ReadAtLeast returns ErrShortBuffer.
+// 如果min和buf长度不匹配返回ErrShortBuffer
 // On return, n >= min if and only if err == nil.
 // If r returns an error having read at least min bytes, the error is dropped.
+// 当读取的数量大于min就丢弃错误，说明这个函数只保证读取min个byte
 func ReadAtLeast(r Reader, buf []byte, min int) (n int, err error) {
 	if len(buf) < min {
 		return 0, ErrShortBuffer
@@ -349,11 +367,13 @@ func ReadAtLeast(r Reader, buf []byte, min int) (n int, err error) {
 		nn, err = r.Read(buf[n:])
 		n += nn
 	}
+	// n >= min只可能出现在上一个for循环最后一次循环n+nn>=min
 	if n >= min {
 		err = nil
 	} else if n > 0 && err == EOF {
 		err = ErrUnexpectedEOF
 	}
+	// 当n<min时， n == 0 或者 err != EOF 则用r.Read的错误直接返回
 	return
 }
 
@@ -364,6 +384,7 @@ func ReadAtLeast(r Reader, buf []byte, min int) (n int, err error) {
 // ReadFull returns ErrUnexpectedEOF.
 // On return, n == len(buf) if and only if err == nil.
 // If r returns an error having read at least len(buf) bytes, the error is dropped.
+// 和ReadAtLeast类似，就是调整了下读取下限
 func ReadFull(r Reader, buf []byte) (n int, err error) {
 	return ReadAtLeast(r, buf, len(buf))
 }
@@ -375,6 +396,7 @@ func ReadFull(r Reader, buf []byte) (n int, err error) {
 //
 // If dst implements the ReaderFrom interface,
 // the copy is implemented using it.
+// 如果dst实现了ReadFrom则直接使用？
 func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
 	written, err = Copy(dst, LimitReader(src, n))
 	if written == n {
@@ -407,9 +429,11 @@ func Copy(dst Writer, src Reader) (written int64, err error) {
 // provided buffer (if one is required) rather than allocating a
 // temporary one. If buf is nil, one is allocated; otherwise if it has
 // zero length, CopyBuffer panics.
+// CopyBuffer和Copy的区别只在于多了个buf参数。buf=nil则重新分配，否则若len(buf)=0则panic
 //
 // If either src implements WriterTo or dst implements ReaderFrom,
 // buf will not be used to perform the copy.
+// src和dst实现了WriterTo或ReaderFrom接口的话，buf就没啥用了，会直接写入
 func CopyBuffer(dst Writer, src Reader, buf []byte) (written int64, err error) {
 	if buf != nil && len(buf) == 0 {
 		panic("empty buffer in CopyBuffer")
