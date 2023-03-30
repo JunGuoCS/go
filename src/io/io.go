@@ -454,6 +454,7 @@ func copyBuffer(dst Writer, src Reader, buf []byte) (written int64, err error) {
 		return rt.ReadFrom(src)
 	}
 	if buf == nil {
+		// 默认构造32KB的数据，若实现了LimiterReader，则生成l.N大小的buffer
 		size := 32 * 1024
 		if l, ok := src.(*LimitedReader); ok && int64(size) > l.N {
 			if l.N < 1 {
@@ -467,7 +468,9 @@ func copyBuffer(dst Writer, src Reader, buf []byte) (written int64, err error) {
 	for {
 		nr, er := src.Read(buf)
 		if nr > 0 {
+			// buf[0:nr]读到的有效数据
 			nw, ew := dst.Write(buf[0:nr])
+			// 如果写入数据比读到的还多肯定是有问题的，可能写了一些无效数据
 			if nw < 0 || nr < nw {
 				nw = 0
 				if ew == nil {
@@ -479,11 +482,13 @@ func copyBuffer(dst Writer, src Reader, buf []byte) (written int64, err error) {
 				err = ew
 				break
 			}
+			// 读到的数据不能完全写入
 			if nr != nw {
 				err = ErrShortWrite
 				break
 			}
 		}
+		// 读报错EOF放过
 		if er != nil {
 			if er != EOF {
 				err = er
@@ -503,6 +508,8 @@ func LimitReader(r Reader, n int64) Reader { return &LimitedReader{r, n} }
 // data returned to just N bytes. Each call to Read
 // updates N to reflect the new amount remaining.
 // Read returns EOF when N <= 0 or when the underlying R returns EOF.
+// 只读取N个数据
+// N<=0返回EOF指异常情况吗？
 type LimitedReader struct {
 	R Reader // underlying reader
 	N int64  // max bytes remaining

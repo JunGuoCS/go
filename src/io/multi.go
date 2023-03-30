@@ -35,6 +35,7 @@ func (mr *multiReader) Read(p []byte) (n int, err error) {
 				// Don't return EOF yet. More readers remain.
 				err = nil
 			}
+			// n==0 && err!=EOF时返回，说明某个reader读取出现异常
 			return
 		}
 	}
@@ -49,15 +50,18 @@ func (mr *multiReader) writeToWithBuffer(w Writer, buf []byte) (sum int64, err e
 	for i, r := range mr.readers {
 		var n int64
 		if subMr, ok := r.(*multiReader); ok { // reuse buffer with nested multiReaders
+			// DFS遍历所有的子multiReader
 			n, err = subMr.writeToWithBuffer(w, buf)
 		} else {
 			n, err = copyBuffer(w, r, buf)
 		}
 		sum += n
 		if err != nil {
+			// 报错移除当前的，未来可以继续调用
 			mr.readers = mr.readers[i:] // permit resume / retry after error
 			return sum, err
 		}
+		// 提早置空触发gc
 		mr.readers[i] = nil // permit early GC
 	}
 	mr.readers = nil
@@ -87,6 +91,7 @@ func (t *multiWriter) Write(p []byte) (n int, err error) {
 			return
 		}
 		if n != len(p) {
+			// 从p写到流，没写完则有异常
 			err = ErrShortWrite
 			return
 		}
